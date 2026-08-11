@@ -4,7 +4,7 @@
 
 Bryan Gibson · Brandon Hall · Peter Demerjian  
 
-Working paper (Accounting Horizons submission format)
+Working paper 
 
 ---
 
