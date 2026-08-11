@@ -1,0 +1,12 @@
+.DS_Store
+.Rhistory
+.RData
+.Rproj.user
+*.log
+*.aux
+*.out
+*.toc
+*_cache/
+.idea/
+__pycache__/
+*.pyc

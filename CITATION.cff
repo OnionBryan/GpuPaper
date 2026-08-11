@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this working paper, please cite it as below."
+title: "Accounting for GPU-Collateralized Debt: Depreciation, Revenue Recognition, and Off-Balance-Sheet Measurement"
+authors:
+  - family-names: Gibson
+    given-names: Bryan
+  - family-names: Hall
+    given-names: Brandon
+  - family-names: Demerjian
+    given-names: Peter
+version: "0.1"
+date-released: "2026-08-11"
+type: unpublished

@@ -1,0 +1,619 @@
+---
+title: "Accounting for GPU-Collateralized Debt: Depreciation, Revenue Recognition, and Off-Balance-Sheet Measurement"
+author: "Bryan Gibson, Brandon Hall, Peter Demerjian"
+date: "2026-08-08"
+abstract: |
+  GPU-collateralized lending has grown from zero to more than \$35 billion in three years, and borrowers' reported performance, revenue, and leverage rest on accounting estimates that observable market data only weakly constrain. Using CoreWeave's FY2025 10-K, we document three measurement channels. First, filed GPU useful lives of five to six years diverge from rental-market evidence consistent with two to three years; on CoreWeave's \$20.9 billion of technology equipment, the difference in annual depreciation (\$7.0 billion) is more than twice adjusted EBITDA. Second, AMD's customer warrants to Meta and OpenAI carry revenue effects of up to \$10.3 billion per year under ASC 606 and ASC 718 as clarified by ASU 2025-04. Third, CoreWeave's \$38.5 billion of uncommenced leases---a present value of roughly \$22 billion, comparable to total reported debt---is disclosed but unrecognized under ASC 842. We identify decision points for standard-setters, auditors, and credit analysts.
+output:
+  pdf_document:
+    latex_engine: xelatex
+    keep_tex: true
+    fig_caption: true
+    number_sections: true
+    toc: false
+    highlight: null
+# AAA / Accounting Horizons manuscript format:
+# 12-pt Times New Roman, double-spaced, 1-inch margins (Manuscript Preparation Guide).
+fontsize: 12pt
+geometry: "margin=1in"
+colorlinks: true
+linkcolor: black
+urlcolor: blue
+citecolor: black
+mainfont: "Times New Roman"
+bibliography: chip_loan.bib
+header-includes:
+  - \usepackage{setspace}
+  - \doublespacing
+  - \usepackage{indentfirst}
+  - \setlength{\parindent}{0.5in}
+  - \setlength{\parskip}{0pt}
+  - \raggedbottom
+  - \usepackage{booktabs}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \floatplacement{table}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 7.5, fig.asp = 0.618, dpi = 300,
+                      fig.align = "center", fig.pos = "H",
+                      out.extra = "", out.width = "88%")
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(scales)
+pal_red    <- "#B71C1C"
+pal_blue   <- "#2C5F8A"
+pal_dark   <- "#2C3E50"
+pal_orange <- "#C05621"
+pal_grey   <- "#7f8c8d"
+
+theme_paper <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) %+replace%
+    theme(
+      text          = element_text(color = pal_dark),
+      plot.title    = element_text(face = "bold", size = base_size + 1, hjust = 0,
+                                   margin = margin(b = 4)),
+      plot.subtitle = element_text(color = pal_grey, size = base_size - 1, hjust = 0,
+                                   margin = margin(b = 10)),
+      plot.caption  = element_text(color = pal_grey, size = base_size - 3,
+                                   hjust = 1, margin = margin(t = 6)),
+      axis.title    = element_text(size = base_size - 1),
+      axis.text     = element_text(color = pal_dark, size = base_size - 2),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor   = element_blank(),
+      panel.grid.major.y = element_line(color = "#e8e8e8", linewidth = 0.35),
+      legend.position    = "top",
+      legend.title       = element_blank(),
+      legend.text        = element_text(size = base_size - 2),
+      plot.margin        = margin(10, 14, 8, 10)
+    )
+}
+```
+
+```{r params, include=FALSE}
+# Financial parameters — single source of truth.
+# All from CoreWeave FY2025 10-K (filed 2026-03-02) unless noted.
+net_ppe    <- 30.557   # Net PP&E ($B), Note 5
+gross_ppe  <- 33.941   # Gross PP&E ($B), Note 5
+tech_ppe   <- 20.903   # Technology equipment, GROSS COST ($B), Note 5
+cip        <- 9.376    # Construction in progress ($B), Note 5
+prod_ppe   <- net_ppe - cip     # In-service (productive) net PP&E ($B)
+depr_rep   <- 2.400    # FY2025 depreciation expense ($B), Note 5
+ebitda     <- 3.093    # Adjusted EBITDA ($B), Q4 2025 press release
+debt       <- 21.615   # Total drawn debt ($B), Note 10
+op_lease   <- 8.195    # Operating lease liabilities ($B), Note 8
+fin_lease  <- 0.254    # Finance lease liabilities ($B), Note 8
+rec_lease  <- op_lease + fin_lease   # Recognized lease liabilities, 8.449
+obs_nom    <- 38.5     # Uncommenced lease obligations, undiscounted ($B), Note 8
+obs_rate   <- 0.10     # Weighted-average operating lease discount rate, Note 8
+obs_term   <- 12       # Assumed level-annuity term (yrs); terms disclosed 5-17
+obs_pv     <- round((obs_nom / obs_term) *
+                    (1 - (1 + obs_rate)^-obs_term) / obs_rate, 1)  # 21.9
+wacc       <- 11.13    # WACC (%), Appendix A
+tax_rate   <- 0.0      # Effective cash tax rate (~0%, NOL carryforwards)
+shares     <- 0.5257   # Shares outstanding (B): Class A 419.0M + Class B 106.7M, 10-K cover
+px_feb26   <- 86.52    # Post-Q4-earnings close ($/sh), February 2026
+mkt_cap    <- round(shares * px_feb26, 1)   # ~45.5
+rev_fy25   <- 5.131    # FY2025 revenue ($B)
+```
+
+\newpage
+
+<!-- ====================================================================== -->
+<!-- SECTION 1: SYNOPSIS AND INSIGHTS FOR PRACTICE                          -->
+<!-- ====================================================================== -->
+
+# Synopsis and Insights for Practice
+
+This paper is written for standard-setters, auditors, preparers, and credit analysts working where AI infrastructure meets financial reporting. GPU-collateralized lending---debt secured by graphics processing units and the customer contracts they serve---has grown from zero to more than \$35 billion in drawn or committed facilities since August 2023. The collateral depreciates on an approximately 18-month generational cycle, lacks an established secondary market, and depends on a single vendor's product cadence. Existing guidance on depreciation (ASC 360), consideration payable to a customer (ASC 606 and ASC 718, as amended by ASU 2019-08 and ASU 2025-04), and leases (ASC 842) was not designed for this combination. Using CoreWeave's FY2025 Form 10-K as a case, we document three measurement channels of first-order magnitude.
+
+*Depreciation.* Filed GPU useful lives cluster at five to six years; spot rental evidence supports economic lives of two to three years. On CoreWeave's \$20.9 billion of technology equipment (gross cost, 10-K Note 5), a two-year life implies annual straight-line depreciation of \$10.5 billion; a six-year life implies \$3.5 billion. The \$7.0 billion difference is more than twice FY2025 adjusted EBITDA of \$3.1 billion, so the useful-life estimate determines whether reported performance is positive at all. Across six publicized hyperscaler estimate changes, only Amazon shortened lives, and it did so while reporting record margins; the five firms that extended were under investment or earnings pressure. This pattern is consistent with incentive-based estimate choice and with learning; we do not claim identification of earnings management.
+
+*Revenue.* AMD granted warrants on 320 million shares (at a \$0.01 exercise price) to Meta and OpenAI, vesting on chip-purchase milestones. Under ASC 606-10-32-25, such consideration generally reduces the transaction price. At AMD's March 2026 share price, the full-award effect is approximately \$10.3 billion per year---32 percent of recognized revenue on those contracts. ASU 2025-04 (issued May 2025) clarifies measurement and vesting mechanics, but application judgments and net-of-warrant disclosure remain unresolved. The reporting entity for this channel is AMD; CoreWeave supplies the depreciation and lease evidence.
+
+*Leases.* CoreWeave disclosed \$38.5 billion of executed but uncommenced data-center leases. Under ASC 842 these are recognized only at commencement; their present value---approximately \$22 billion under the assumptions in Appendix A---approximately equals total reported debt of \$21.6 billion. Including recognized lease liabilities, total fixed obligations rise from \$30.1 billion recognized to roughly \$52.0 billion, against \$5.1 billion of revenue. This is a post-adoption recognition-timing gap, not a disclosure failure.
+
+For standard-setters, the case supports disclosure of useful-life sensitivities for rapid-obsolescence assets and presentation of uncommenced leases alongside the maturity analysis. For auditors, it identifies concrete risk-assessment questions under existing standards (ASC 360, ASC 250, AU-C 570). For credit analysts, it shows that rental-rate indices provide auditable evidence on collateral lives that filed estimates do not reflect. We contribute to research on discretionary depreciation [@marquardt2004cost; @jackson2009managers], customer consideration [@zhang2005revenue; @srivastava2014implications], and off-balance-sheet lease measurement [@cornaggia2013opting; @kraft2015rating] by documenting a single setting in which all three estimates move reported outcomes by amounts large enough to change interpretation of solvency, revenue, and leverage. Section 2 provides institutional background; Section 3 develops the setting and research questions; Section 4 describes the data; Section 5 presents the analysis; Section 6 concludes.
+
+<!-- ====================================================================== -->
+<!-- SECTION 2: BACKGROUND                                                  -->
+<!-- ====================================================================== -->
+
+# Background
+
+## Debt Capital Markets and Asset-Backed Lending
+
+Debt is a major source of corporate capital: combined sovereign and corporate issuance reached a record \$27 trillion globally in 2025 [@oecd2026debt]. Borrowers select among public bonds, syndicated and sole-lender bank loans, private placements, and---in a recently emergent market---private credit extended by non-bank lenders, with the choice determined by credit quality, information environment, and market conditions [@denis2003choice; @demerjian2019lenders]. Within the private loan market, syndication lets a lead lender negotiate terms and distribute shares of the loan, limiting single-name exposure and supporting larger facilities.
+
+When expected cash flows are uncertain, lenders strengthen their position through collateral: contractually reserved assets the lender can claim on default. Collateral does not guarantee recovery, but it ensures the assets remain available and raises the likelihood the lender receives them. Receivables, inventory, fixed assets, and intangibles all serve as collateral [@eisfeldt2009leasing; @gavazza2011leasing; @rampini2019financing], and ex post verification of collateral value is a core part of loan monitoring [@townsend1979costly; @demerjian2019lenders].
+
+## AI Hyperscalers
+
+The demand side of the chip-lending market is anchored by AI hyperscalers: firms that operate data-center infrastructure at industrial scale and sell computing capacity as a service. The incumbents (Amazon Web Services, Microsoft Azure, Google Cloud) funded general-purpose cloud buildouts largely from operating cash flow. The generative-AI boom that followed late 2022 created a specialized adjacent segment, the neoclouds---GPU-focused providers including CoreWeave, Lambda, Crusoe, and Nscale---purpose-built to supply accelerated computing for training and serving AI models.
+
+The business model converts capital into contracted compute revenue: acquire accelerator hardware (overwhelmingly NVIDIA GPUs, given that vendor's roughly 92 percent share of discrete GPU shipments [@jonpeddie2025q1]), install it in owned or leased data centers, and sell capacity under multi-year, frequently take-or-pay contracts. Because hardware must be purchased, installed, and energized before revenue begins, the model is front-loaded and capital intensive, and growth requires continuous access to external capital. The scale is macroeconomically significant: combined capital expenditures of the four largest hyperscalers approached \$400 billion in 2025, with 2026 guidance exceeding \$600 billion [@cnbc2026capex], and @furman2025gdp estimates that AI-related infrastructure investment accounted for 92 percent of U.S. GDP growth in the first half of 2025. Incumbents fund capex internally; neoclouds fund hardware with debt secured by the chips themselves and the customer contracts the chips serve.
+
+A defining feature of the buildout is that the same counterparties appear on multiple sides of transactions. NVIDIA is simultaneously the dominant supplier, an equity investor in customers, and a capacity backstop for CoreWeave; Microsoft is both CoreWeave's largest customer and a reseller of that capacity for OpenAI workloads; Meta is a CoreWeave compute customer, an AMD warrant recipient, and a credit backstop on CoreWeave's newest term loan. Commentators characterize the resulting demand as partially reflexive: financing provided by suppliers and customers generates purchases that would not occur on standalone economics [@kanaparthi2025reflexive; @tunguz2025circular]. These overlapping relationships matter for measurement because transaction price, collateral value, and counterparty dependence are linked rather than separable.
+
+## Chip-Collateralized Lending
+
+Chip collateral carries risks uncommon to asset-backed lending generally. Chip cash flows are hard to assess, complicating the ex post verification lenders rely on; rapid generational turnover exposes existing models to economic obsolescence; and the circular supplier-customer relationships described above can be interpreted as creating artificial demand, making collateral values still harder to judge.
+
+The market developed rapidly because it filled a gap traditional credit could not: fast-growing AI infrastructure firms needed billions to purchase NVIDIA GPUs but lacked the earnings history or ratings for conventional bank financing. The watershed facility was CoreWeave's August 2023 \$2.3 billion delayed-draw term loan (DDTL) led by Magnetar Capital and Blackstone [@coreweave2023ddtl], secured by GPUs and long-term customer contracts; that structure became the sector template. Representative subsequent transactions include CoreWeave's \$7.5 billion DDTL 2.0 (May 2024), Crusoe's AMD-guaranteed facility (the first major non-NVIDIA chip loan), and CoreWeave's March 2026 Meta-backed DDTL 4.0 at approximately SOFR+225 basis points, supported by more than \$19 billion in Meta contracts [@bloomberg2026f]. Drawn or committed facilities across the sector now exceed \$35 billion (a full market chronology and facility-level detail appear in the online appendix). The instruments span DDTLs, vendor-backed guarantees, senior and convertible notes, and nascent ABS structures; each allocates useful-life, demand, and refinancing risk to a different balance sheet, which is why measurement of those exposures matters for financial reporting and credit analysis.
+
+<!-- ====================================================================== -->
+<!-- SECTION 3: SETTING AND RESEARCH QUESTIONS                              -->
+<!-- ====================================================================== -->
+
+# Setting and Research Questions
+
+## Setting
+
+CoreWeave began in 2017 as Atlantic Crypto, an Ethereum-mining operation; repurposed its GPU inventory toward rendering and machine-learning workloads after the 2018 crypto collapse; and rode the generative-AI boom to become the largest pure-play GPU cloud provider, completing a Nasdaq IPO in March 2025 at \$40 per share. For fiscal 2025, CoreWeave reported revenue of \$5,131 million (168 percent growth), net property and equipment of \$30.6 billion, remaining performance obligations of \$60.7 billion, and total revenue backlog of \$66.8 billion.
+
+The operating model concentrates exposure on both sides of the balance sheet. On the asset side, virtually the entire fleet consists of NVIDIA GPUs, tying collateral value to a single vendor's product cycle. On the revenue side, a small number of customers dominate: Microsoft represented 62 percent of FY2024 revenue, and diversification came primarily through an approximately \$6.5 billion contract with OpenAI through 2031 and an approximately \$14.2 billion contract with Meta through 2031. FY2025 capital expenditures of \$10.3 billion against operating cash flow of \$3.1 billion produced negative free cash flow of \$7.2 billion; the business requires continuous access to capital markets.
+
+That access has come principally through debt: \$21.6 billion drawn across twelve instruments (Section 4). Each major DDTL is housed in a ring-fenced special-purpose vehicle, with GPU hardware, customer contracts, and SPV equity pledged through perfected first-priority security interests (10-K, Note 10). The structure is designed for bankruptcy remoteness; whether it survives a Chapter 11 filing---whether the automatic stay under 11 U.S.C. §362 would prevent lenders from seizing GPU collateral, and whether the SPVs would be substantively consolidated---is untested. Contract enforceability also bears on revenue: the 10-K discloses termination provisions triggered by material breach, delivery failures, and financing contingencies, and CoreWeave's Q3 2025 revenue forecast was cut by more than \$200 million when a third-party data-center provider failed to deliver capacity on time. The \$60.7 billion of remaining performance obligations is contractual face value, not risk-adjusted expected cash flow.
+
+## Research Questions
+
+The institutional features above raise three research questions. Research Questions 1 and 3 use CoreWeave's filings; Research Question 2 uses AMD's customer warrants in the same GPU ecosystem (the reporting entity for that channel is AMD, not CoreWeave).
+
+**Research Question 1.** *Are GPU useful-life estimates consistent with observable market evidence on value erosion, and are the direction and timing of estimate changes consistent with reporting incentives?*
+
+Under ASC 360-10, entities estimate the useful life of long-lived assets and depreciate systematically over that estimate; depreciation begins when an asset is placed in service, and no authoritative standard prescribes a life for GPU hardware. Changes in useful life are changes in accounting estimate under ASC 250-10-45-17 through 45-20, applied prospectively and disclosed if material. Separately, ASC 360-10-35-21 requires an entity to test long-lived assets for *recoverability* when events or changes in circumstances indicate the carrying amount may not be recoverable; that paragraph governs impairment testing, not routine life reassessment. The IFRS contrast is therefore specific: IAS 16.51 requires review of useful life and residual value at least at each annual reporting date, while US GAAP requires recoverability testing when indicators exist and estimate revisions when warranted under ASC 250---no automatic annual life reset. CoreWeave, a US GAAP filer, is not required to reassess useful lives annually absent such indicators.
+
+Depreciation estimates are discretionary choices with material earnings consequences: firms exercise discretion over method and life in ways consistent with earnings-management incentives [@marquardt2004cost], and estimate changes cluster around earnings benchmarks [@jackson2009managers]. The GPU setting is distinctive because the estimate determines whether the capital structure appears solvent. Filed lives cluster at five to six years; H100 spot rental rates declined 66--83 percent within roughly two years of their October 2023 peak (Section 5.4) against a generational replacement cycle of approximately 18 months, making a two-to-three-year economic life plausible under current conditions. The magnitudes are first-order: Note 5 reports technology equipment at a gross cost of \$20.9 billion. Under straight-line depreciation with zero residual value, a two-year life implies annual depreciation of approximately \$10.5 billion and a six-year life approximately \$3.5 billion; the \$7.0 billion difference is more than twice adjusted EBITDA of \$3.1 billion. Construction in progress of \$9.4 billion is excluded because it is not depreciated until placed in service.
+
+The credit transmission runs through earnings and collateral, not through EBITDA. A \$1 billion facility underwritten on a five-year schedule carries \$200 million of annual depreciation; at three years, \$333 million. The additional expense does not affect EBITDA, which is measured before depreciation and amortization; it reduces EBIT and net income, accelerates the decline in collateral carrying amounts (raising loan-to-value), and raises impairment risk. Whether private-credit debt-service-coverage covenants move depends on each agreement's EBITDA definition, which is not fully observable in public filings; if covenant EBITDA runs before depreciation, the direct coverage channel is muted and the operative channels are residual value, loan-to-value, and GAAP earnings. Notably, GPU-backed spreads are essentially identical to non-AI private credit [@bis2026bulletin120]; in a structural framework [@merton1974pricing], a spread indistinguishable from non-AI lending implies the market assigns near-zero weight to the short-life state.
+
+Residual value compounds the problem. ASC 360-10-35-4 requires depreciation to reduce carrying amount to estimated residual value, but no active secondary market exists for used data-center GPUs; CoreWeave's Note 1 discloses no residual assumption, implying zero. The buyer pool is structurally limited because purchasing used GPUs requires existing data-center infrastructure, so potential buyers overlap with potential sellers---the configuration in which liquidation values are lowest [@shleifer1992liquidation]. Even in the mature aircraft market, constrained sellers realize discounts of 15--35 percent [@pulvino1998do], roughly half reflecting under-maintenance by distressed sellers [@franks2022decomposing]; both components apply with greater force to GPUs.
+
+**Research Question 2.** *How should vendor warrants linked to chip-purchase agreements be measured under ASC 606 and ASC 718 as amended, and what is the range of recognized-revenue outcomes?*
+
+ASC 606-10-32-25 requires consideration payable to a customer to be accounted for as a reduction of the transaction price unless the payment is for a distinct good or service (ASC 606-10-32-26). ASU 2019-08 brought share-based payments to customers within ASC 718 for measurement, with the revenue effect following the ASC 606 framework. In May 2025 the FASB issued ASU 2025-04, *Clarifications to Share-Based Consideration Payable to a Customer*, which expands the definition of a performance condition to include conditions based on the volume, monetary amount, or timing of a customer's purchases; eliminates the policy election to account for forfeitures as they occur for such awards; and clarifies that ASC 606's variable-consideration constraint does not apply to share-based customer consideration. The ASU is effective for fiscal years beginning after December 15, 2026, with early adoption permitted.
+
+The GPU market has produced a specific instance of this question. AMD granted warrants to Meta and OpenAI---320 million shares in total at a \$0.01 exercise price---that vest as the customers purchase specified quantities of MI300X and MI350 accelerators. At AMD's March 2026 share price of approximately \$193, the warrants carry intrinsic value of approximately \$61.8 billion against roughly \$190 billion in combined purchase commitments over six years. Section 5.2 quantifies the range of recognized-revenue outcomes under the clarified framework.
+
+**Research Question 3.** *What is the gap between reported and economic leverage when uncommenced lease obligations are capitalized, and how do accounting returns behave across depreciation and capitalization scenarios?*
+
+Under ASC 842, a lessee recognizes and measures right-of-use assets and lease liabilities as of the lease *commencement date*---the date the lessor makes the underlying asset available for use (ASC 842-20-30-1). Executed leases that have not commenced are not recognized; ASC 842-20-50-3(b) requires disclosure of leases that have not yet commenced but create significant rights and obligations. For firms with large committed-but-uncommenced portfolios, this recognition-timing rule opens a gap between reported and economic leverage that is structurally different from the pre-842 operating-lease classification gap the standard closed. CoreWeave's FY2025 10-K discloses \$38.5 billion of uncommenced data-center lease commitments---1.8 times recognized debt. @cornaggia2013opting document strategic structuring of lease obligations to minimize recognition before ASC 842; the CoreWeave setting does not show strategic timing of commencement, but it illustrates that a post-842 recognition-timing gap of first-order magnitude remains. @kraft2015rating shows rating agencies adjust for off-balance-sheet leases inconsistently; a gap of this size tests the adequacy of footnote-only presentation.
+
+<!-- ====================================================================== -->
+<!-- SECTION 4: DATA                                                        -->
+<!-- ====================================================================== -->
+
+# Data and Descriptive Evidence
+
+## Data Description
+
+Our sample is CoreWeave's GPU-collateralized debt: \$21,615 million in drawn principal across twelve instruments, with capacity of roughly \$30 billion if all facilities were fully drawn. Data are from CoreWeave's 10-K (filed March 2, 2026), other SEC filings, the S\&P LCD private credit database, investor presentations and press releases, agency ratings, the financial press, and central-bank research. The unit of analysis is the individual facility (Table 1).
+
+The four DDTLs (labeled 1.0, 2.0, 2.1, 3.0) carry effective rates of 9--15 percent---firmly speculative, particularly for secured debt---with \$9,671 million drawn of \$15,500 million available and a combined annual interest burden just above \$1 billion. Unlike revolvers, drawn DDTL amounts cannot be redrawn and convert to term loans with fixed quarterly repayment schedules concluding roughly five years after issuance. CoreWeave also issued \$3,750 million of unsecured senior notes at 10 percent effective rates (maturing 2030 and 2031), \$2,756 million of convertible instruments, a \$2,500 million revolving line secured by undisclosed assets, \$4,165 million of OEM and software-licensor financing at a reported average 10 percent rate, and a \$273 million loan from Magnetar at 12 percent.^[Magnetar Capital, CoreWeave's earliest institutional investor, also led DDTL 1.0, placing the same counterparty on both the equity and debt sides of the capital structure.] CoreWeave notes the DDTLs are secured by GPUs while proceeds purchase more GPUs.
+
+```{r}
+#| label: tbl-facilities
+
+facilities <- data.frame(
+  Facility = c("DDTL 1.0", "DDTL 2.0", "DDTL 2.1", "DDTL 3.0",
+               "2030 Sr. Notes", "2031 Sr. Notes", "2031 Conv. Notes",
+               "Conv. Promissory", "RCF", "OEM/Software",
+               "Magnetar Loan", "\\textbf{Total}"),
+  Originated = c("Jul 2023", "May 2024", "Sep 2025", "Jul 2025",
+                 "May 2025", "Jul 2025", "Dec 2025",
+                 "Oct 2025", "Pre-IPO", "Various",
+                 "2025", ""),
+  Maturity = c("Mar 2028", "Aug 2030", "Dec 2030", "Aug 2030",
+               "Jun 2030", "Feb 2031", "Dec 2031",
+               "Apr 2026", "Nov 2029", "Mar 26--Jul 30",
+               "Jan 2029", ""),
+  Rate = c("15\\%", "10\\%", "9\\%", "9\\%",
+           "10\\%", "10\\%", "2\\%",
+           "7\\%", "6\\%", "10\\%",
+           "12\\%", ""),
+  Outstanding = c("\\$1,553", "\\$5,037", "\\$2,741", "\\$340",
+                  "\\$2,000", "\\$1,750", "\\$2,588",
+                  "\\$168", "\\$1,000", "\\$4,165",
+                  "\\$273", "\\textbf{\\$21,615}"),
+  Capacity = c("\\$2,300", "\\$7,600", "\\$3,000", "\\$2,600",
+               "---", "---", "---",
+               "---", "\\$2,500", "\\$5,200",
+               "---", ""),
+  Type = c("Secured", "Secured", "Secured", "Secured",
+           "Unsecured", "Unsecured", "Unsecured",
+           "Unsecured", "Secured", "Secured",
+           "Secured", ""),
+  stringsAsFactors = FALSE
+)
+
+kable(facilities, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "CoreWeave debt obligations as of December 31, 2025. All data from 10-K, Note 10. Effective rates include amortization of discount and issuance costs. Outstanding amounts in millions.",
+      col.names = c("Facility", "Originated", "Maturity", "Eff. Rate", "Outstanding", "Capacity", "Security"),
+      align = "llllrrl") %>%
+  kable_styling(latex_options = c("HOLD_position", "scale_down"),
+                full_width = FALSE, font_size = 10) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(12, bold = TRUE)
+```
+
+## Debt Service, Covenants, and Operations
+
+The principal repayment schedule (10-K, Note 10) requires \$6,708 million in 2026, \$4,298 million in 2027, \$2,393 million in 2028, \$1,769 million in 2029, \$2,109 million in 2030, and \$4,338 million thereafter, summing to \$21,615 million. Against FY2025 operating cash flow of \$3,058 million and free cash flow of negative \$7.2 billion, every dollar of the 2026 maturities must be refinanced externally. Interest expense has grown with the debt stack: quarterly interest climbed from \$67 million in Q2 2024 to \$388 million in Q4 2025, and FY2025 GAAP operating income of negative \$46 million against interest expense of \$1,229 million yields EBIT-to-interest coverage of $-$0.04x.^[Three interest figures appear in the 10-K and are used in this paper for different purposes: contractual coupon interest of \$1,220 million, of which \$182 million was capitalized into property and equipment; income-statement interest expense of \$1,229 million, which is net of capitalization and includes amortization of discounts and issuance costs; and net interest expense of \$1,148 million, after interest income. Coverage ratios in Section 5.4 use the \$1,229 million income-statement figure.]
+
+The covenant history confirms the strain. In December 2025, CoreWeave negotiated amendments to DDTL 3.0 that reduced the minimum liquidity requirement to \$100 million for the March--April 2026 payment dates, postponed debt-service-coverage testing to October 2027, and permitted unlimited equity cures until October 2026 [@coreweave2026amendment]---a 20-month window without formal covenant measurement. Lenders grant such concessions when the alternative is technical default. The amendments sharpen the incentive question in Section 5.1: with a DSCR of 0.39x and capital expenditures at 3.36 times operating cash flow, extending useful life reduces depreciation expense and improves reported EBIT, net income, and any covenant metric defined after depreciation (covenant EBITDA definitions typically add depreciation back, so that channel is muted). CoreWeave's own extension from five to six years occurred in January 2023, before the covenant pressure materialized; the open question is whether the estimate would be revised downward if incentives reversed, as Amazon's was.
+
+Operationally, revenue grew 168 percent to \$5,131 million in FY2025, with 85 percent of the increase from expansion of existing customer contracts; remaining performance obligations quadrupled to \$60.7 billion at a revenue-weighted average contract length of roughly five years. Concentration remains acute: Microsoft peaked at 71 percent of revenue in Q2 2025, and although no customer exceeded 35 percent at year-end after the OpenAI and Meta contracts, @kerrisdale2025coreweave argue that on a look-through basis virtually all of Microsoft's reserved capacity supports OpenAI workloads, concentrating ultimate demand in a single source---consistent with the circularity discussed in Sections 2.2 and 3.1.
+
+Market signals bifurcated in early 2026. CoreWeave missed Q4 2025 earnings estimates, producing an 18 percent single-session decline to \$86.52 [@cnbc2026d]; its 9.25 percent senior notes traded above coupon yield and CDS spreads more than doubled from October 2025. Yet in March 2026 the company secured an \$8.5 billion Meta-backed DDTL at SOFR+225 basis points---a spread available only because Meta's contracted backlog absorbs the credit risk; without that enhancement, market participants estimated 400--600 basis points wider [@bloomberg2026f]. CoreWeave retains capital access, but increasingly as a pass-through for investment-grade counterparties rather than as an independent credit.
+
+<!-- ====================================================================== -->
+<!-- SECTION 5: ACCOUNTING ANALYSIS                                         -->
+<!-- ====================================================================== -->
+
+# Accounting Analysis
+
+## Depreciation
+
+Loan durations of three to five years must coexist with collateral whose economic life is contested; the answer determines whether the capital structure supports current loan pricing.
+
+```{r}
+#| label: fig-dumbbell
+#| fig-cap: "Hyperscaler GPU useful-life estimate changes. Amazon shortened from 6 to 5 years (Feb 2025, $-$\\$0.7B income impact); Meta extended from 5 to 5.5 years (+\\$2.3B); Google extended from 4 to 6 years (Jan 2023, +\\$3.4B). The divergence under identical technology conditions is consistent with both incentive-based and learning-based explanations (Section 5.1)."
+#| fig-height: 3.8
+#| fig-width: 8
+
+depr_df <- data.frame(
+  company  = factor(c("Amazon", "Meta", "Google"),
+                    levels = c("Google", "Meta", "Amazon")),
+  old_life = c(6, 5, 4),
+  new_life = c(5, 5.5, 6),
+  impact   = c("-$0.7B", "+$2.3B", "+$3.4B"),
+  when     = c("Feb 2025", "Jan 2025", "Jan 2023"),
+  stringsAsFactors = FALSE
+)
+
+ggplot(depr_df) +
+  geom_segment(aes(x = old_life, xend = new_life,
+                   y = company, yend = company),
+               linewidth = 2.5, color = pal_grey, alpha = 0.4) +
+  geom_point(aes(x = old_life, y = company), color = pal_blue, size = 5) +
+  geom_point(aes(x = new_life, y = company), color = pal_red, size = 5) +
+  geom_text(aes(x = old_life, y = company, label = paste0(old_life, " yr")),
+            vjust = -1.3, size = 3.2, color = pal_blue, fontface = "bold") +
+  geom_text(aes(x = new_life, y = company, label = paste0(new_life, " yr")),
+            vjust = -1.3, size = 3.2, color = pal_red, fontface = "bold") +
+  geom_text(aes(x = (old_life + new_life) / 2, y = company,
+                label = paste0(impact, " (", when, ")")),
+            vjust = 2.5, size = 2.9, color = pal_dark) +
+  scale_x_continuous(limits = c(3.5, 6.5), breaks = 3:7,
+                     labels = function(x) paste0(x, " yr")) +
+  labs(
+    title = "GPU useful-life estimate changes at major operators",
+    subtitle = "Blue = prior estimate; red = revised estimate; income impact and date shown below each segment",
+    x = "GPU Useful Life Estimate (years)", y = NULL,
+    caption = "Source: Amazon 10-K FY2024 (Feb 2025); Meta 10-Q Q3 2025; Google 10-K 2023."
+  ) +
+  theme_paper() +
+  theme(panel.grid.major.y = element_blank(),
+        axis.text.y = element_text(size = 11, face = "bold"))
+```
+
+**Estimate changes and incentives.** Positive accounting theory predicts that firms with margin headroom can afford conservative (shorter) lives while firms under earnings pressure extend them [@watts1986positive; @healy1999review]. Table 2 tabulates the financial context of six publicized GPU or server useful-life changes.
+
+```{r}
+#| label: tbl-depr-context
+
+context_df <- data.frame(
+  Company   = c("Amazon", "Google", "Microsoft", "Meta", "Oracle", "CoreWeave"),
+  Change    = c("6$\\rightarrow$5 yr", "4$\\rightarrow$6 yr", "4$\\rightarrow$6 yr",
+                "5$\\rightarrow$5.5 yr", "4$\\rightarrow$6 yr", "5$\\rightarrow$6 yr"),
+  Direction = c("Shortened", "Extended", "Extended", "Extended", "Extended", "Extended"),
+  Impact    = c("-\\$0.7B", "+\\$3.4B", "+\\$3.7B", "+\\$2.3B", "+\\$434M", "+\\$20M"),
+  CapEx_OCF = c("0.72", "0.42", "0.37", "n/a", "1.02", "3.36"),
+  Context   = c("Record AWS margins; headroom to absorb cost",
+                "Intensifying AI capex; earnings support",
+                "AI capex ramp; cloud margin pressure",
+                "AI investment ramp; Reality Labs cost pressure",
+                "\\$100B+ AI capex plan; CapEx/OCF $>$ 1",
+                "Negative FCF; DSCR covenant pressure"),
+  stringsAsFactors = FALSE
+)
+
+kable(context_df, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "Financial context at the time of GPU useful-life estimate changes. CapEx/OCF ratios from Kanaparthi (2025) where available. The directional pattern is consistent with positive-accounting-theory incentives; with six observations selected on publicized changes, we present it as descriptive motivating evidence, not a test (see text).",
+      col.names = c("Company", "Change", "Direction", "Income",
+                    "CapEx/OCF", "Context at Change Date"),
+      align = "llllrl") %>%
+  kable_styling(latex_options = c("HOLD_position", "scale_down"), font_size = 10)
+```
+
+Across the six changes, only Amazon shortened life, and it did so during record AWS profitability---precisely when conservatism is cheapest---while the shortened estimate moved *against* NVIDIA's public claims of four-to-six-year real-world utilization. The five firms that extended were each under investment or earnings pressure. This asymmetry is harder to reconcile with pure learning than with incentive-influenced estimate choice, but the pattern is also consistent with rational Bayesian updating from longer deployment histories (Google and Microsoft extended in 2022--2023, early in the buildout), and six selected observations cannot separate the two. We therefore state the result narrowly: the direction of publicized estimate changes is consistent with reporting incentives; we do not claim identification of earnings management. Amazon's own reversal---extending to six years and returning to five within roughly a year, at a cost of \$700 million in operating income and \$920 million of accelerated depreciation---illustrates the instability of the estimate itself. Bear-case estimates place life at two to three years, implying sector-wide understated depreciation of roughly \$176 billion over 2026--2028 [@burry2025depreciation]; moderate estimates center on three to four years [@kerrisdale2025coreweave]. Both sources are short sellers; NVIDIA and CoreWeave management have publicly rebutted, and the debate is unresolved. The answer determines collateral adequacy across the asset class.
+
+**Accounting rates of return across scenarios.** We compute ROIC = NOPAT / invested capital under alternative depreciation conventions (Table 3). Three caveats govern interpretation. First, @fisher1983misuse shows the accounting rate of return is a biased estimator of the internal rate of return, particularly for growing firms; a firm investing \$10.3 billion in a year while earning revenue from a smaller installed base produces low ROIC by construction. Table 3 documents the *measurement consequence* of the depreciation estimate, not project economics. Second, depreciation applies only to assets in service: scenario depreciation is computed on in-service net PPE of \$21.2 billion (net PPE of \$30.6 billion less \$9.4 billion of construction in progress, which enters invested capital but not the depreciation base until placed in service). Third, NOPAT $\approx$ EBIT because the effective cash tax rate is approximately zero (NOL carryforwards). We use adjusted EBITDA of \$3,093 million as the earnings base and hold it fixed across scenarios.
+
+```{r}
+#| label: tbl-roic
+
+# Panel A: invested capital = total net PPE; depreciation on in-service PPE only
+lives  <- c(2, 3, 5, 6)
+depr_a <- prod_ppe / lives
+roic_a <- (ebitda - depr_a) / net_ppe * 100
+roic_obs <- (ebitda - prod_ppe / 6) / (net_ppe + obs_pv) * 100
+roic_rep <- (ebitda - depr_rep) / net_ppe * 100
+
+# Panel B: invested capital = in-service (productive) PPE only
+roic_b <- (ebitda - depr_a) / prod_ppe * 100
+
+fmt <- function(x) paste0(sprintf("%.1f", x), "\\%")
+gap <- function(x) paste0(sprintf("%.1f", x - wacc), " pp")
+
+roic_display <- data.frame(
+  Scenario = c("\\textit{Panel A: IC = total net PPE (\\$30.6B); depreciation on in-service PPE}",
+               "As reported (FY2025 depr. \\$2.4B, partial year)",
+               "Bear (2 yr, steady state)", "Moderate (3 yr, steady state)",
+               "Industry (5 yr, steady state)", "Bull (6 yr, steady state)",
+               "Bull (6 yr) + \\$21.9B uncommenced-lease PV in IC",
+               "", "\\textit{Panel B: IC = in-service PPE (\\$21.2B)}",
+               "Bear (2 yr)", "Moderate (3 yr)", "Industry (5 yr)", "Bull (6 yr)"),
+  ROIC = c("", fmt(roic_rep), fmt(roic_a), fmt(roic_obs),
+           "", "", fmt(roic_b)),
+  WACC = c("", rep(paste0(wacc, "\\%"), 6), "", "", rep(paste0(wacc, "\\%"), 4)),
+  Gap  = c("", gap(roic_rep), gap(roic_a), gap(roic_obs), "", "", gap(roic_b)),
+  stringsAsFactors = FALSE
+)
+
+kable(roic_display, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "Accounting rates of return under alternative depreciation conventions (Fisher-biased ARR, not project IRR). Scenario depreciation is straight-line on in-service net PPE (\\$21.2B); construction in progress (\\$9.4B) is included in Panel A invested capital but not depreciated until placed in service. The final Panel A row adds the \\$21.9B present value of uncommenced leases (Appendix A) to invested capital while holding earnings and depreciation unchanged: ROIC moves toward zero because the same loss is spread over a larger capital base; the economic content of the uncommenced leases is leverage (Table 5), not return compression.",
+      col.names = c("Scenario", "ROIC", "WACC", "Gap"),
+      align = "lrrr") %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 10) %>%
+  row_spec(c(1, 9), bold = TRUE) %>%
+  row_spec(2, italic = TRUE)
+```
+
+**Key result.** The accounting rate of return ranges from `r sprintf('%.1f', roic_rep)`\% (as-reported, partial-year depreciation) to `r sprintf('%.1f', min(roic_b))`\% (bear case on in-service capital); no scenario approaches the 11.13\% WACC benchmark (Appendix A). The comparisons must be kept separate. As-reported depreciation of \$2.4 billion reflects partial-year ownership of assets acquired during 2025; in steady state, a six-year life on in-service PPE implies \$3.5 billion of annual depreciation and ROIC of `r sprintf('%.1f', roic_a[4])`\%. Adding the \$21.9 billion present value of uncommenced leases to invested capital *raises* ROIC to `r sprintf('%.1f', roic_obs)`\% because invested capital grows while the earnings base is unchanged---these are different experiments, and only the steady-state pair isolates the lease effect. The measurement consequence of the uncommenced leases is leverage (Section 5.3), not return compression. Whether EBITDA growth closes the return gap before the 2026--2027 maturity wall---\$9.4 billion of construction in progress is not yet generating revenue---is the J-curve question the point-in-time ROIC cannot answer.
+
+## Revenue Recognition
+
+AMD's 8-K (October 6, 2025, Exhibit 4.1) discloses a warrant to OpenAI covering 160 million shares at a \$0.01 exercise price, expiring October 5, 2030, explicitly referencing the "Product Purchase Agreement for AMD Instinct Products" and providing automatic exercise at expiration; the Meta warrant is structured identically at 160 million shares. Vesting schedules (Exhibits E and F) are redacted. Under ASC 606-10-32-25 the warrants reduce the transaction price unless they compensate a distinct good or service (ASC 606-10-32-26); under ASU 2019-08 and ASU 2025-04 they are measured under ASC 718, with purchase-milestone vesting now explicitly a performance condition.
+
+Measurement-date discipline matters for the magnitudes. ASC 718 measures equity-classified customer awards at grant-date fair value; we do not observe a disclosed grant-date valuation, and the public vesting schedule is redacted. Because the warrants are deeply in the money at a \$0.01 strike, intrinsic value approximates fair value, and all amounts below are stated at AMD's March 2026 share price of approximately \$193---a post-grant sensitivity, not a grant-date measurement; the figures scale linearly with the measurement-date price. At \$193, the 320 million warrants carry intrinsic value of approximately \$61.8 billion against roughly \$190 billion of purchase commitments over six years: full vesting spread straight-line implies an annual revenue reduction of approximately \$10.3 billion, or 32 percent of recognized revenue on these contracts. Table 4 organizes the accounting outcomes as a baseline with timing and scope alternatives---not four co-equal policy elections.
+
+```{r}
+#| label: tbl-warrant-treatments
+
+warrant_df <- data.frame(
+  Treatment = c("1. Full reduction, ratable over commitment period",
+                "2. Reduction allocated as milestones vest",
+                "3. Bifurcation (illustrated at 50\\% strategic)",
+                "4. Separate transaction (no revenue effect)"),
+  Basis     = c("ASC 606-10-32-25; full fair value",
+                "ASC 606-10-32-25; ASU 2025-04 performance conditions",
+                "ASC 606-10-32-26 distinct-service test",
+                "Freestanding equity instrument"),
+  Annual_Red = c("\\$10.3B", "\\$10.3B avg (timing varies)", "\\$5.2B", "\\$0"),
+  Pct_Rev    = c("32\\%", "32\\% avg", "16\\%", "0\\%"),
+  Status = c("Upper bound (full vesting)",
+             "Baseline; most consistent with disclosed structure",
+             "Sensitivity; requires evidence of a distinct service",
+             "Difficult to support given contractual linkage"),
+  stringsAsFactors = FALSE
+)
+
+kable(warrant_df, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "Accounting outcomes for AMD customer warrants under ASC 606-10-32-25 as clarified by ASU 2025-04. All amounts assume a \\$193 share price (March 2026; intrinsic value approximates fair value for deep-in-the-money penny warrants) and a six-year commitment period. Treatments 1 and 2 produce the same total reduction and differ only in timing; Treatment 3's 50 percent split is an illustration, not a codified floor.",
+      col.names = c("Treatment", "Basis", "Annual Reduction", "\\% of Rev.", "Status"),
+      align = "llrrl") %>%
+  kable_styling(latex_options = c("HOLD_position", "scale_down"), font_size = 10)
+```
+
+ASU 2025-04 resolves part of what practice commentary had identified as open: purchase-milestone vesting is a performance condition, forfeitures must be estimated rather than recognized as they occur, and the ASC 606 variable-consideration constraint does not apply. What remains judgmental is the distinct-good-or-service assessment under ASC 606-10-32-26 (Treatment 3 requires affirmative evidence AMD receives a distinct service), the timing profile while vesting schedules remain redacted, and disclosure: neither classification nor net-of-warrant revenue is separately disclosed. The full-award upper bound is approximately \$10.3 billion per year; partial vesting and bifurcation are sensitivities below that bound, and we do not characterize any sub-range as a GAAP floor. NVIDIA's commitment to purchase up to \$6.3 billion of unsold CoreWeave capacity through April 2032 (CoreWeave 10-K, Note 15) raises a parallel consideration-payable question in service rather than equity form; we flag it as an emerging issue. Application and disclosure, rather than the absence of standards, now leave recognized revenue on these contracts subject to a wide range of outcomes.
+
+## Leases
+
+CoreWeave reports \$8,231 million of operating-lease right-of-use assets and recognized lease liabilities of \$8.4 billion---\$8,195 million operating and \$254 million finance (10-K, Note 8)---for leases that have commenced. Separately, Note 8 discloses \$38.5 billion of future payments under executed data-center leases that have not yet commenced, with terms of 5 to 17 years and a weighted-average operating-lease discount rate of 10 percent.
+
+Under ASC 842, recognition and measurement occur at the commencement date, when the lessor makes the underlying asset available for use; for data-center leases under construction, that date arrives at delivery. Executed but uncommenced leases are therefore not recognized, and ASC 842-20-50-3(b) requires disclosure of uncommenced leases that create significant rights and obligations---which is what CoreWeave's footnote provides. The \$38.5 billion is accordingly a *recognition-timing and presentation* gap relative to economic commitments, not a non-disclosure gap: the obligations appear in a footnote but not on the balance sheet or in the maturity analysis of recognized liabilities. The magnitude distinguishes this case from the pre-842 literature: uncommenced commitments are 1.8 times recognized debt, a ratio that dwarfs the classification-driven gaps ASC 842 was designed to close [@cornaggia2013opting; @kraft2015rating]. We do not interpret the balance as strategic timing of commencement; construction lead times explain it. The point is that a post-842 gap of first-order magnitude exists and is invisible to balance-sheet-based leverage metrics [@bis2026bulletin120; @oliverwyman2026datacenter].
+
+Discounting \$38.5 billion at the disclosed 10 percent rate as a level annuity over 12 years commencing immediately gives a present value of \$`r sprintf('%.1f', obs_pv)` billion; the value ranges from roughly \$19.5 billion to \$24.2 billion across 10-to-15-year horizons and 8-to-12-percent rates (Appendix A). Table 5 states the leverage arithmetic with explicit baselines: the present value of uncommenced leases approximately equals total reported debt, and total fixed obligations rise from \$30.1 billion recognized to approximately \$52.0 billion---1.7 times recognized obligations, or 2.4 times reported debt alone---against \$5.1 billion of FY2025 revenue.
+
+```{r}
+#| label: tbl-obs
+
+stack <- data.frame(
+  Item = c("Reported debt (Note 10)",
+           "Recognized lease liabilities (operating \\$8,195M + finance \\$254M)",
+           "\\textbf{Recognized fixed obligations}",
+           "PV of uncommenced leases (\\$38.5B at 10\\%, Appendix A)",
+           "\\textbf{Total fixed obligations incl. uncommenced}",
+           "Memo: FY2025 revenue",
+           "Memo: total obligations / recognized obligations",
+           "Memo: total obligations / reported debt"),
+  Amount = c(paste0("\\$", sprintf('%.1f', debt), "B"),
+             paste0("\\$", sprintf('%.1f', rec_lease), "B"),
+             paste0("\\textbf{\\$", sprintf('%.1f', debt + rec_lease), "B}"),
+             paste0("$\\approx$\\$", sprintf('%.1f', obs_pv), "B"),
+             paste0("\\textbf{$\\approx$\\$", sprintf('%.1f', debt + rec_lease + obs_pv), "B}"),
+             paste0("\\$", sprintf('%.1f', rev_fy25), "B"),
+             paste0(sprintf('%.1f', (debt + rec_lease + obs_pv) / (debt + rec_lease)), "x"),
+             paste0(sprintf('%.1f', (debt + rec_lease + obs_pv) / debt), "x")),
+  stringsAsFactors = FALSE
+)
+
+kable(stack, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "Economic leverage including uncommenced leases, December 31, 2025. The stack holds earnings and depreciation fixed; it is a leverage statement, not a return statement. The return effect of adding the uncommenced-lease PV to invested capital appears in Table 3 and is mechanical (the same loss spread over a larger base).",
+      col.names = c("Item", "Amount"),
+      align = "lr") %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 10) %>%
+  row_spec(c(3, 5), bold = TRUE)
+```
+
+## Additional Evidence: Credit Metrics and Rental Rates
+
+**Credit metrics.** Lenders price debt service coverage and collateral adequacy rather than ROIC (Table 6).
+
+```{r}
+#| label: tbl-credit-metrics
+
+credit_df <- data.frame(
+  Metric = c("EBITDA / Interest (interest coverage)",
+             "EBITDA / (Interest + 2026 Principal)",
+             "Debt / Book PPE (in-service)",
+             "Debt / Market PPE (20\\% haircut, bull)",
+             "Debt / Market PPE (40\\% haircut, base)",
+             "Debt / Market PPE (60\\% haircut, bear)"),
+  Value = c("2.52x", "0.39x", "102\\%", "128\\%", "170\\%", "255\\%"),
+  Assessment = c("Adequate for interest; incomplete without principal",
+                 "2026 maturities cannot be covered from operations",
+                 "Marginal at book value",
+                 "Underwater with modest discount",
+                 "Underwater; consistent with 40\\% spot decline from peak",
+                 "Severely underwater; consistent with 60\\% spot decline"),
+  stringsAsFactors = FALSE
+)
+
+kable(credit_df, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "Credit metrics computed from CoreWeave's FY2025 10-K. Loan-to-value uses in-service PPE (\\$21.2B; construction in progress has no GPU collateral value in a forced sale) with market haircuts anchored to the H100 spot rental decline.",
+      col.names = c("Metric", "Ratio", "Assessment"),
+      align = "lrl") %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 10) %>%
+  column_spec(3, width = "7cm") %>%
+  footnote(general = "Coverage ratios use GAAP interest expense of \\\\$1,229M (10-K Note 10). The coverage measure here is EBITDA-based for comparability across facilities; credit-agreement DSCR definitions vary, are not fully observable in public filings, and typically compute EBITDA before depreciation, so the useful-life estimate reaches these ratios through earnings-based and collateral-based covenant terms rather than through EBITDA itself. DDTL facilities hold first-priority claims on specific GPU pools within ring-fenced SPVs; facility-level LTV may differ from the enterprise-level figures shown.",
+           escape = FALSE, general_title = "", threeparttable = TRUE)
+```
+
+The 0.39x ratio of EBITDA to interest plus 2026 principal is the binding constraint: EBITDA of \$3.09 billion covers interest of \$1.23 billion at 2.52x, but \$6.7 billion of 2026 maturities overwhelms operating cash flow, so refinancing is compulsory. At a 40 percent haircut to in-service PPE---consistent with the H100 spot rental decline---loan-to-value reaches 170 percent, implying roughly 59 cents on the dollar in liquidation. The rental evidence suggests those haircuts are conservative: an accelerator whose spot rate has halved within two years would not resell at half of retail, because realizable price embeds further discounts for sustained industrial duty [@franks2022decomposing] and for the structurally thin buyer pool described in Section 3.2.1 [@shleifer1992liquidation].
+
+**Rental-rate evidence.** H100 spot pricing fell 66--83 percent from its October 2023 peak despite a favorable demand environment (Figure 2); as of February 26, 2026, the GPU Lease Index reports spot rates of \$1.63/hr against a benchmark average of \$2.54/hr. The pattern indicates that generational replacement, not physical wear, binds useful life. The accounting implication should be stated carefully: the arrival of a next-generation architecture delivering two-to-three-times performance at equivalent cost *may* constitute a significant adverse change in the extent or manner of use---an impairment indicator under ASC 360-10-35-21---but recoverability remains fact-specific to the asset group's undiscounted cash flows, including contracted revenue. CoreWeave management's disclosure that contracted H100 pricing remained within 10 percent of year-start levels illustrates the distinction: long-term take-or-pay contracts can support recoverability even as spot rates collapse, while the spot market governs liquidation value in a forced sale. Whether trigger-based reassessment is adequate for assets on 18-month replacement cycles---as against IAS 16's required annual review of useful life and residual value---is a live standard-setting question.
+
+```{r}
+#| label: fig-rental-decay
+#| fig-cap: "H100 hourly spot rental rates, October 2023--March 2026. Rates fell 66--83\\% from the \\$8/hr peak; the dashed line marks Blackwell volume shipment. A counter-seasonal +10\\% spike occurred December 9, 2025--January 6, 2026 (Silicon Data) before decline resumed. Sources: Silicon Data SDH100RT Index, GPU Lease Index (gpuleaseindex.com, Feb 26, 2026), Introl, ThunderCompute. CoreWeave's Q4 2025 call disclosed contracted H100 pricing within 10\\% of year-start levels."
+#| fig-height: 4.6
+#| fig-width: 7.5
+
+rental <- data.frame(
+  date = as.Date(c("2023-10-01", "2024-01-01", "2024-04-01", "2024-07-01",
+                    "2024-10-01", "2025-01-01", "2025-04-01", "2025-06-01")),
+  high = c(8.0, 8.0, 7.5, 6.0, 4.5, 3.8, 3.5, 3.2),
+  low  = c(6.0, 5.5, 5.0, 3.5, 2.5, 1.8, 1.5, 1.3)
+)
+
+post_bw <- data.frame(
+  date = as.Date(c("2025-06-01", "2025-10-01", "2025-12-09", "2026-01-06", "2026-02-26")),
+  high = c(3.2, 2.8, 3.50, 2.90, 2.54),
+  low  = c(1.3, 1.38, 2.85, 1.63, 1.63)
+)
+
+blackwell_date <- as.Date("2025-06-01")
+
+ggplot() +
+  geom_ribbon(data = post_bw, aes(x = date, ymin = low, ymax = high),
+              fill = pal_orange, alpha = 0.07) +
+  geom_line(data = post_bw, aes(x = date, y = high),
+            color = pal_orange, linewidth = 0.7, linetype = "dotted", lineend = "round") +
+  geom_line(data = post_bw, aes(x = date, y = low),
+            color = pal_blue, linewidth = 0.6, linetype = "dotted", lineend = "round") +
+  geom_ribbon(data = rental, aes(x = date, ymin = low, ymax = high),
+              fill = pal_orange, alpha = 0.22) +
+  geom_line(data = rental, aes(x = date, y = high),
+            color = pal_orange, linewidth = 1.2, lineend = "round") +
+  geom_line(data = rental, aes(x = date, y = low),
+            color = pal_blue, linewidth = 1.0, lineend = "round") +
+  geom_vline(xintercept = blackwell_date,
+             linetype = "dashed", color = pal_red, linewidth = 0.7) +
+  annotate("text", x = blackwell_date + 12, y = 9.3,
+           label = "Blackwell volume ships",
+           color = pal_red, size = 2.9, hjust = 0, fontface = "bold") +
+  annotate("text", x = as.Date("2024-10-01"), y = 7.8,
+           label = "-66% from peak",
+           color = pal_dark, size = 3.2, fontface = "bold", hjust = 0.5) +
+  annotate("text", x = as.Date("2023-10-15"), y = 8.6,
+           label = "Major clouds (high)", color = pal_orange, size = 2.9,
+           fontface = "bold", hjust = 0) +
+  annotate("text", x = as.Date("2023-10-15"), y = 6.3,
+           label = "Discount tier (low)", color = pal_blue, size = 2.9, hjust = 0) +
+  scale_y_continuous(labels = dollar_format(prefix = "$", suffix = "/hr"),
+                     breaks = seq(0, 10, 2), limits = c(0, 10)) +
+  scale_x_date(date_labels = "%b\n%Y", date_breaks = "3 months",
+               limits = c(as.Date("2023-10-01"), as.Date("2026-03-15"))) +
+  labs(title = "H100 spot rental rates, October 2023 to March 2026",
+       subtitle = "Solid = pre-Blackwell; dotted = post-Blackwell continuation",
+       y = "Hourly Rental Rate ($/hr)", x = NULL) +
+  theme_paper() +
+  theme(legend.position = "none")
+```
+
+As a compact robustness statement, the same conclusion appears in credit metrics and rental evidence: interest coverage looks adequate only if principal is ignored; loan-to-value exceeds 100 percent once modest haircuts are applied to in-service PPE; and spot rental rates support economic lives shorter than filed estimates. Extended fire-sale recovery benchmarks and reduced-form pricing of the short-life state are in the online appendix.
+
+<!-- ====================================================================== -->
+<!-- SECTION 6: CONCLUSION                                                  -->
+<!-- ====================================================================== -->
+
+# Conclusion
+
+Using CoreWeave's FY2025 10-K and AMD's customer-warrant disclosures, we document three measurement channels in GPU-collateralized lending. On depreciation, filed useful lives and market evidence diverge by a factor of two to three; on \$20.9 billion of technology equipment, the difference in annual depreciation across that range (\$7.0 billion) exceeds twice adjusted EBITDA, and the direction of publicized estimate changes is consistent with reporting incentives, though six observations cannot identify earnings management. Under stated conventions, no depreciation scenario produces an accounting rate of return above the 11.13 percent cost-of-capital benchmark; we interpret this as a statement about measurement sensitivity, not project economics. On revenue, AMD's warrants carry a full-award effect of approximately \$10.3 billion per year (32 percent of recognized revenue on those contracts) at the March 2026 price, with partial vesting and bifurcation as sensitivities below that bound; ASU 2025-04 clarifies measurement, while application and disclosure judgments remain. On leases, the \$22 billion present value of uncommenced commitments approximately equals reported debt and lifts total fixed obligations to roughly \$52 billion---a recognition-timing gap that balance-sheet leverage metrics do not surface.
+
+**Implications.** Disclosure, not new recognition rules, is the practical remedy. For standard-setters: useful-life sensitivity disclosure for rapid-obsolescence technology assets; presentation of significant uncommenced leases alongside the maturity analysis; disclosure of net-of-warrant revenue by arrangement; and evaluation of whether trigger-based life reassessment under US GAAP remains adequate relative to IAS 16.51's annual review. For auditors: the case supplies concrete risk-assessment and evidence questions under existing standards---the support for useful lives against observable rental indices (ASC 360, ASC 250), whether generational displacement indicates a recoverability test (ASC 360-10-35-21), and how contracted backlog weighs against termination provisions in going-concern evaluation under AU-C 570 and ASC 205-40 [@carson2013going]. For users and lenders, rental-rate indices offer auditable, contractible evidence on collateral value that filed estimates do not currently reflect.
+
+**Limitations.** Private-credit opacity limits us to public disclosures; no historical default series exists for GPU collateral; capital employed is held constant in the return analysis despite large planned capex; warrant figures assume full vesting and are stated at a post-grant price; and generalization beyond one borrower and one vendor remains open.
+
+**Disclosure.** The authors have no financial interest in any entity discussed. No author holds equity in, consults for, or has received compensation from CoreWeave, AMD, NVIDIA, or any GPU-collateralized lending participant. No external funding was received.
+
+**Data availability.** All data are from public filings (SEC EDGAR), the financial press, and cited third-party sources. The facility-level dataset, R code, and replication materials are available in the online supplement.
+
+\newpage
+
+\appendix
+
+# Appendix A: ROIC, WACC, and Uncommenced-Lease PV {-}
+
+**ROIC.** ROIC = NOPAT / invested capital, with NOPAT = (EBITDA $-$ depreciation) $\times$ (1 $-$ t) and t $\approx$ 0 given NOL carryforwards. Invested capital is net PPE (\$30,557M, Note 5) rather than total assets less non-interest-bearing liabilities because the collateral question concerns the hardware securing the debt; Panel B of Table 3 restricts to in-service PPE (\$21,181M = net PPE less \$9,376M construction in progress). Scenario depreciation is straight-line on in-service net PPE; FY2025 reported depreciation was \$2,400M (Note 5). Technology equipment (gross cost \$20,903M, Note 5) is the base for the useful-life gap in Section 3.2.1.
+
+**WACC (11.13 percent).** Cost of equity: 4.25 percent risk-free (10-year Treasury, February 2026) + 1.8 $\times$ 5.5 percent equity risk premium [@damodaran2026erp] = 14.15 percent. The 1.8 beta is conservative relative to Damodaran's Computer Services unlevered beta of 0.92 relevered at the 65 percent debt weight (2.63). Cost of debt: approximately 9.5 percent (weighted average of Note 10 effective rates), untaxed given NOLs. Weights: the primary calculation uses a 65 percent debt weight anchored to the book capital structure, with beta relevered at that same leverage. At market weights the conclusion is unchanged: with 525.7 million shares outstanding (10-K cover page) and the February 2026 post-earnings price of \$86.52, market capitalization is approximately \$`r sprintf('%.1f', mkt_cap)` billion, debt/(debt+equity) is approximately 32 percent, the consistently relevered beta is 1.36, cost of equity 11.7 percent, and WACC approximately 11.0 percent---within 15 basis points of the primary figure. WACC = 0.35 $\times$ 14.15 + 0.65 $\times$ 9.5 = 11.13 percent. A prior estimate by @chanos2025coreweave of 9.72 percent is lower; all gap calculations here use 11.13 percent. The sensitivity table below shows the qualitative conclusion (ROIC $<$ WACC in every scenario) holds from 9.4 to 12.7 percent.
+
+```{r}
+#| label: tbl-wacc-sensitivity
+
+rf  <- 4.25
+erp <- 5.5
+dc  <- 0.65
+cd  <- 9.5
+lev <- 1 + (1 - tax_rate) * dc / (1 - dc)
+
+wacc_sens <- data.frame(
+  Comp = c("Paper primary ($\\beta$ = 1.8)", "Computer Services (relevered)",
+           "Data Center Infrastructure (relevered)"),
+  Unl_Beta = c("---", "0.92", "0.70"),
+  Rel_Beta = c(1.80, round(0.92 * lev, 2), round(0.70 * lev, 2)),
+  stringsAsFactors = FALSE
+)
+wacc_sens$CoE  <- round(rf + wacc_sens$Rel_Beta * erp, 2)
+wacc_sens$WACC <- round((1 - dc) * wacc_sens$CoE + dc * cd, 2)
+bull_roic_raw  <- (ebitda - prod_ppe / 6) / prod_ppe * 100
+wacc_sens$Bull_ROIC <- sprintf("%.1f\\%%", bull_roic_raw)
+wacc_sens$Gap  <- sprintf("%.1f pp", bull_roic_raw - wacc_sens$WACC)
+
+kable(wacc_sens, "latex", booktabs = TRUE, escape = FALSE,
+      caption = "WACC sensitivity to the beta assumption. The first row reproduces the primary WACC (11.13\\%, $\\beta$ = 1.8). Unlevered comparables (Damodaran Computer Services, 0.92; data-center infrastructure, 0.70) are relevered at the 65 percent debt weight with a zero tax shield given the NOL position, which mechanically produces high relevered betas. The productive-asset bull-case ROIC shortfall persists under all assumptions.",
+      col.names = c("Comparable", "Unlevered $\\beta$", "Relevered $\\beta$",
+                    "Cost of Equity", "WACC", "Bull ROIC (Prod.)", "Gap"),
+      align = "lcccccc") %>%
+  kable_styling(latex_options = c("HOLD_position", "scale_down"), font_size = 10)
+```
+
+If CoreWeave exhausts its NOL carryforwards and returns to a 25 percent effective tax rate, the infrastructure-comparable relevered beta falls to approximately 1.7, the cost of equity to 13.5 percent, and WACC to approximately 9.4 percent (0.35 $\times$ 13.5 + 0.65 $\times$ 9.5 $\times$ 0.75); the bull-case ROIC of $-$2.1 percent remains below that lower bound.
+
+**Uncommenced-lease present value.** Note 8 disclosures: \$38.5 billion undiscounted, terms of 5--17 years, weighted-average operating-lease discount rate 10 percent. We assume equal annual payments over 12 years commencing immediately, discounted at 10 percent: PV = \$`r sprintf('%.1f', obs_pv)` billion. Sensitivity: \$23.7B (10 years) to \$19.5B (15 years) at 10 percent; \$24.2B at 8 percent and \$19.9B at 12 percent over 12 years. All Table 5 statements use the \$`r sprintf('%.1f', obs_pv)` billion point estimate and are qualitatively invariant across this range.
+
+# Online Appendix (separate document) {-}
+
+The online appendix contains: (i) the full GPU-collateralized debt market chronology and accumulation figure; (ii) the circular-flow network map of counterparties; (iii) extended facility-level detail; (iv) warrant classification and fair-value technical notes (liability-versus-equity classification; option-value versus intrinsic value); and (v) fire-sale recovery benchmarks and reduced-form pricing of the short-life state.
+
+\newpage
+
+# References {-}
